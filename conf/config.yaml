@@ -23,8 +23,8 @@ etcd:
   prefix: /SERVICES/apisix
   tls:
     verify: true
-    cert: cert/miot-etcd_client.pem
-    key: cert/miot-etcd_client_key.pem
+    cert: conf/cert/miot-etcd_client.pem
+    key: conf/cert/miot-etcd_client_key.pem
 
 #
 # To configure via environment variables, you can use `${{VAR}}` syntax. For instance:
@@ -53,7 +53,7 @@ apisix:
       role: admin
   enable_control: true
   ssl:
-    ssl_trusted_certificate: cert/miot-etcd_ca.pem
+    ssl_trusted_certificate: conf/cert/miot-etcd_ca.pem
   control:
     ip: "0.0.0.0"
     port: 9090
