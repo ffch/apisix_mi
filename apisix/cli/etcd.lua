@@ -190,79 +190,16 @@ function _M.init(env, args)
 
     -- check the etcd cluster version
     local etcd_healthy_hosts = {}
-
     for index, host in ipairs(yaml_conf.etcd.host) do
-        print("etcd_healthy_hosts add ", host)
         table_insert(etcd_healthy_hosts, host)
     end
-    print("etcd_healthy_hosts list ", etcd_healthy_hosts)
+
     if #etcd_healthy_hosts <= 0 then
         util.die("all etcd nodes are unavailable\n")
     end
 
     if (#etcd_healthy_hosts / host_count * 100) <= 50 then
         util.die("the etcd cluster needs at least 50% and above healthy nodes\n")
-    end
-
-    local etcd_ok = false
-    for index, host in ipairs(etcd_healthy_hosts) do
-        local is_success = true
-
-        local errmsg
-        local auth_token
-        local user = yaml_conf.etcd.user
-        local password = yaml_conf.etcd.password
-        if user and password then
-            local auth_url = host .. "/v3/auth/authenticate"
-            local json_auth = {
-                name =  etcd_conf.user,
-                password = etcd_conf.password
-            }
-
-            local post_json_auth = dkjson.encode(json_auth)
-            local response_body = {}
-
-            local res, err
-            local retry_time = 0
-            while retry_time < 2 do
-                res, err = request({
-                    url = auth_url,
-                    method = "POST",
-                    source = ltn12.source.string(post_json_auth),
-                    sink = ltn12.sink.table(response_body),
-                    headers = {
-                        ["Content-Length"] = #post_json_auth
-                    }
-                }, yaml_conf)
-                -- In case of failure, request returns nil followed by an error message.
-                -- Else the first return value is just the number 1
-                -- and followed by the response status code.
-                if res then
-                    break
-                end
-                retry_time = retry_time + 1
-                print(str_format("Warning! Request etcd endpoint \'%s\' error, %s, retry time=%s",
-                                 auth_url, err, retry_time))
-            end
-
-            if not res then
-                errmsg = str_format("request etcd endpoint \"%s\" error, %s\n", auth_url, err)
-                util.die(errmsg)
-            end
-
-            local res_auth = table_concat(response_body)
-            local body_auth, _, err_auth = dkjson.decode(res_auth)
-            if err_auth or (body_auth and not body_auth["token"]) then
-                errmsg = str_format("got malformed auth message: \"%s\" from etcd \"%s\"\n",
-                                    res_auth, auth_url)
-                util.die(errmsg)
-            end
-
-            auth_token = body_auth.token
-        end
-
-    if not etcd_ok then
-        util.die("none of the configured etcd works well\n")
     end
 end
 
