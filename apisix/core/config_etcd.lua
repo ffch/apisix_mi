@@ -106,7 +106,7 @@ local function readdir(etcd_cli, key, formatter)
         return nil, err
     end
     if type(res.body) ~= "table" then
-        return nil, "failed to read etcd dir:".. key .. ", data:" .. json.encode(res)
+        return nil, "failed to read etcd dir:".. key
     end
 
     res, err = etcd_apisix.get_format(res, key .. '/', true, formatter)
