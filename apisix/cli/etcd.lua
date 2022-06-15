@@ -193,7 +193,7 @@ function _M.init(env, args)
     for index, host in ipairs(yaml_conf.etcd.host) do
         table_insert(etcd_healthy_hosts, host)
     end
-
+    print("etcd_healthy_hosts list ", etcd_healthy_hosts)
     if #etcd_healthy_hosts <= 0 then
         util.die("all etcd nodes are unavailable\n")
     end
@@ -201,6 +201,8 @@ function _M.init(env, args)
     if (#etcd_healthy_hosts / host_count * 100) <= 50 then
         util.die("the etcd cluster needs at least 50% and above healthy nodes\n")
     end
+
+    print("etcd_healthy_check pass ")
 end
 
 
