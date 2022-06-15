@@ -100,13 +100,13 @@ local function readdir(etcd_cli, key, formatter)
     if not etcd_cli then
         return nil, "not inited"
     end
-    print("readdir  key", key)
+    log.info("readdir  key", key)
     local res, err = etcd_cli:readdir(key)
     if not res then
         -- log.error("failed to get key from etcd: ", err)
         return nil, err
     end
-    print("readdir  res", res)
+    log.info("readdir  res", json.encode(res))
     if type(res.body) ~= "table" then
         return nil, "failed to read etcd dir"
     end
