@@ -45,7 +45,7 @@ local error        = error
 local rand         = math.random
 local constants    = require("apisix.constants")
 local health_check = require("resty.etcd.health_check")
-local print        = print
+
 
 local is_http = ngx.config.subsystem == "http"
 local err_etcd_unhealthy_all = "has no healthy etcd endpoint available"
@@ -100,13 +100,15 @@ local function readdir(etcd_cli, key, formatter)
     if not etcd_cli then
         return nil, "not inited"
     end
+
     local res, err = etcd_cli:readdir(key)
     if not res then
         -- log.error("failed to get key from etcd: ", err)
         return nil, err
     end
+
     if type(res.body) ~= "table" then
-        return nil, "failed to read etcd dir:".. key
+        return nil, "failed to read etcd dir"
     end
 
     res, err = etcd_apisix.get_format(res, key .. '/', true, formatter)

@@ -28,7 +28,6 @@ local ipairs           = ipairs
 local setmetatable     = setmetatable
 local string           = string
 local tonumber         = tonumber
-local print            = print
 local _M = {}
 
 
@@ -71,7 +70,7 @@ local function new()
             retry = true,
         })
     end
-    print("start new etcd  ", etcd_conf)
+
     local etcd_cli
     etcd_cli, err = etcd.new(etcd_conf)
     if not etcd_cli then
@@ -234,7 +233,7 @@ local function set(key, value, ttl)
     if not res then
         return nil, err
     end
-
+    core.log.warn("set res :", res)
     res.headers["X-Etcd-Index"] = res.body.header.revision
 
     -- etcd v3 set would not return kv info

@@ -191,9 +191,48 @@ function _M.init(env, args)
     -- check the etcd cluster version
     local etcd_healthy_hosts = {}
     for index, host in ipairs(yaml_conf.etcd.host) do
-        table_insert(etcd_healthy_hosts, host)
+        local version_url = host .. "/version"
+        local errmsg
+
+        local res, err
+        local retry_time = 0
+
+        local health_check_retry = tonumber(yaml_conf.etcd.health_check_retry) or 2
+        while retry_time < health_check_retry do
+            res, err = request(version_url, yaml_conf)
+            -- In case of failure, request returns nil followed by an error message.
+            -- Else the first return value is the response body
+            -- and followed by the response status code.
+            if res then
+                break
+            end
+            retry_time = retry_time + 1
+            print(str_format("Warning! Request etcd endpoint \'%s\' error, %s, retry time=%s",
+                             version_url, err, retry_time))
+        end
+
+        if res then
+            local body, _, err = dkjson.decode(res)
+            if err or (body and not body["etcdcluster"]) then
+                errmsg = str_format("got malformed version message: \"%s\" from etcd \"%s\"\n", res,
+                        version_url)
+                util.die(errmsg)
+            end
+
+            local cluster_version = body["etcdcluster"]
+            if compare_semantic_version(cluster_version, env.min_etcd_version) then
+                util.die("etcd cluster version ", cluster_version,
+                         " is less than the required version ", env.min_etcd_version,
+                         ", please upgrade your etcd cluster\n")
+            end
+
+            table_insert(etcd_healthy_hosts, host)
+        else
+            io_stderr:write(str_format("request etcd endpoint \'%s\' error, %s\n", version_url,
+                    err))
+        end
     end
-    print("etcd_healthy_hosts list ", etcd_healthy_hosts)
+
     if #etcd_healthy_hosts <= 0 then
         util.die("all etcd nodes are unavailable\n")
     end
@@ -202,7 +241,146 @@ function _M.init(env, args)
         util.die("the etcd cluster needs at least 50% and above healthy nodes\n")
     end
 
-    print("etcd_healthy_check pass ")
+    local etcd_ok = false
+    for index, host in ipairs(etcd_healthy_hosts) do
+        local is_success = true
+
+        local errmsg
+        local auth_token
+        local user = yaml_conf.etcd.user
+        local password = yaml_conf.etcd.password
+        if user and password then
+            local auth_url = host .. "/v3/auth/authenticate"
+            local json_auth = {
+                name =  etcd_conf.user,
+                password = etcd_conf.password
+            }
+
+            local post_json_auth = dkjson.encode(json_auth)
+            local response_body = {}
+
+            local res, err
+            local retry_time = 0
+            while retry_time < 2 do
+                res, err = request({
+                    url = auth_url,
+                    method = "POST",
+                    source = ltn12.source.string(post_json_auth),
+                    sink = ltn12.sink.table(response_body),
+                    headers = {
+                        ["Content-Length"] = #post_json_auth
+                    }
+                }, yaml_conf)
+                -- In case of failure, request returns nil followed by an error message.
+                -- Else the first return value is just the number 1
+                -- and followed by the response status code.
+                if res then
+                    break
+                end
+                retry_time = retry_time + 1
+                print(str_format("Warning! Request etcd endpoint \'%s\' error, %s, retry time=%s",
+                                 auth_url, err, retry_time))
+            end
+
+            if not res then
+                errmsg = str_format("request etcd endpoint \"%s\" error, %s\n", auth_url, err)
+                util.die(errmsg)
+            end
+
+            local res_auth = table_concat(response_body)
+            local body_auth, _, err_auth = dkjson.decode(res_auth)
+            if err_auth or (body_auth and not body_auth["token"]) then
+                errmsg = str_format("got malformed auth message: \"%s\" from etcd \"%s\"\n",
+                                    res_auth, auth_url)
+                util.die(errmsg)
+            end
+
+            auth_token = body_auth.token
+        end
+
+
+        local dirs = {}
+        for name in pairs(constants.HTTP_ETCD_DIRECTORY) do
+            dirs[name] = true
+        end
+        for name in pairs(constants.STREAM_ETCD_DIRECTORY) do
+            dirs[name] = true
+        end
+
+        for dir_name in pairs(dirs) do
+            local key =  (etcd_conf.prefix or "") .. dir_name .. "/"
+
+            local put_url = host .. "/v3/kv/put"
+            local post_json = '{"value":"' .. base64_encode("init_dir")
+                              .. '", "key":"' .. base64_encode(key) .. '"}'
+            local response_body = {}
+            local headers = {["Content-Length"] = #post_json}
+            if auth_token then
+                headers["Authorization"] = auth_token
+            end
+
+            local res, err
+            local retry_time = 0
+            while retry_time < 2 do
+                res, err = request({
+                    url = put_url,
+                    method = "POST",
+                    source = ltn12.source.string(post_json),
+                    sink = ltn12.sink.table(response_body),
+                    headers = headers
+                }, yaml_conf)
+                retry_time = retry_time + 1
+                if res then
+                    break
+                end
+                print(str_format("Warning! Request etcd endpoint \'%s\' error, %s, retry time=%s",
+                                 put_url, err, retry_time))
+            end
+
+            if not res then
+                errmsg = str_format("request etcd endpoint \"%s\" error, %s\n", put_url, err)
+                util.die(errmsg)
+            end
+
+            local res_put = table_concat(response_body)
+            if res_put:find("404 page not found", 1, true) then
+                errmsg = str_format("gRPC gateway is not enabled in etcd cluster \"%s\",",
+                                    "which is required by Apache APISIX\n")
+                util.die(errmsg)
+            end
+
+            if res_put:find("CommonName of client sending a request against gateway", 1, true) then
+                errmsg = str_format("etcd \"client-cert-auth\" cannot be used with gRPC-gateway, "
+                                 .. "please configure the etcd username and password "
+                                 .. "in configuration file\n")
+                util.die(errmsg)
+            end
+
+            if res_put:find("error", 1, true) then
+                is_success = false
+                if (index == host_count) then
+                    errmsg = str_format("got malformed key-put message: \"%s\" from etcd \"%s\"\n",
+                                        res_put, put_url)
+                    util.die(errmsg)
+                end
+
+                break
+            end
+
+            if args and args["verbose"] then
+                print(res_put)
+            end
+        end
+
+        if is_success then
+            etcd_ok = true
+            break
+        end
+    end
+
+    if not etcd_ok then
+        util.die("none of the configured etcd works well\n")
+    end
 end
 
 
