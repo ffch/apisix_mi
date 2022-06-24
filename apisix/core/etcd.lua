@@ -25,10 +25,10 @@ local etcd             = require("resty.etcd")
 local clone_tab        = require("table.clone")
 local health_check     = require("resty.etcd.health_check")
 local log              = require("apisix.core.log")
+local json             = require("apisix.core.json")
 local ipairs           = ipairs
 local setmetatable     = setmetatable
 local string           = string
-local print            = print
 local tonumber         = tonumber
 local _M = {}
 
@@ -235,8 +235,7 @@ local function set(key, value, ttl)
     if not res then
         return nil, err
     end
-    print("set res :", res)
-    log.error("set res :", res)
+    log.error("set res :", json.delay_encode(res))
     res.headers["X-Etcd-Index"] = res.body.header.revision
 
     -- etcd v3 set would not return kv info
