@@ -235,7 +235,7 @@ local function set(key, value, ttl)
     if not res then
         return nil, err
     end
-    log.error("set res :", json.delay_encode(res))
+    log.error("set res :", json.delay_encode(res.body, true))
     res.headers["X-Etcd-Index"] = res.body.header.revision
 
     -- etcd v3 set would not return kv info
