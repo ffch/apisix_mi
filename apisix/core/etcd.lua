@@ -227,7 +227,7 @@ local function set(key, value, ttl)
         if not data then
             return nil, grant_err
         end
-        res, err = etcd_cli:set(prefix .. key, value, {prev_kv = true, lease = data.body.ID})
+        res, err = etcd_cli:set(prefix .. key, value, {prev_kv = true})
         res.body.lease_id = data.body.ID
     else
         res, err = etcd_cli:set(prefix .. key, value, {prev_kv = true})
