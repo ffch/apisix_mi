@@ -27,6 +27,7 @@ local health_check     = require("resty.etcd.health_check")
 local ipairs           = ipairs
 local setmetatable     = setmetatable
 local string           = string
+local print            = print
 local tonumber         = tonumber
 local _M = {}
 
@@ -233,7 +234,8 @@ local function set(key, value, ttl)
     if not res then
         return nil, err
     end
-    core.log.warn("set res :", res)
+    core.log.error("set res :", res)
+    print("set res :", res)
     res.headers["X-Etcd-Index"] = res.body.header.revision
 
     -- etcd v3 set would not return kv info
