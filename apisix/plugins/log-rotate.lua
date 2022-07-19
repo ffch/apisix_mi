@@ -214,7 +214,7 @@ local function init_default_logs(logs_info, log_type)
     logs_info[log_type] = { type = log_type }
     if filename ~= "off" then
         logs_info[log_type].file = filepath .. filename
-        logs_info[log_type].new_file = filepath .. "/%s__" .. filename
+        logs_info[log_type].new_file = filepath .. "/" .. filename .. ".%s"
     end
 end
 
@@ -254,7 +254,7 @@ local function rotate()
         return
     end
 
-    local now_date = os_date("%Y-%m-%d_%H-%M-%S", now_time)
+    local now_date = os_date("%Y%m%d_%H", now_time)
     local access_new_file = rename_file(default_logs[DEFAULT_ACCESS_LOG_FILENAME], now_date)
     local error_new_file = rename_file(default_logs[DEFAULT_ERROR_LOG_FILENAME], now_date)
     if not access_new_file and not error_new_file then

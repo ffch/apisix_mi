@@ -24,8 +24,6 @@ local array_mt         = require("apisix.core.json").array_mt
 local etcd             = require("resty.etcd")
 local clone_tab        = require("table.clone")
 local health_check     = require("resty.etcd.health_check")
-local log              = require("apisix.core.log")
-local json             = require("apisix.core.json")
 local ipairs           = ipairs
 local setmetatable     = setmetatable
 local string           = string
@@ -227,7 +225,7 @@ local function set(key, value, ttl)
         if not data then
             return nil, grant_err
         end
-        res, err = etcd_cli:set(prefix .. key, value, {prev_kv = true})
+        res, err = etcd_cli:set(prefix .. key, value, {prev_kv = true, lease = data.body.ID})
         res.body.lease_id = data.body.ID
     else
         res, err = etcd_cli:set(prefix .. key, value, {prev_kv = true})
@@ -235,7 +233,7 @@ local function set(key, value, ttl)
     if not res then
         return nil, err
     end
-    log.error("set res :", json.delay_encode(res.body, true))
+
     res.headers["X-Etcd-Index"] = res.body.header.revision
 
     -- etcd v3 set would not return kv info
